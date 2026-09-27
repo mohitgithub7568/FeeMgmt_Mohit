@@ -1,0 +1,23 @@
+// Monitoring queries (KQL)
+// Run in: Azure Portal -> appi-feemgmt -> Logs
+
+
+// 1. All API calls in the last 24 hours, by result code (200, 401, 403, 429 ...)
+requests
+| where timestamp > ago(24h)
+| summarize calls = count() by cloud_RoleName, name, resultCode
+| order by calls desc
+
+
+// 2. Function response times
+requests
+| where timestamp > ago(24h)
+| where cloud_RoleName has "func"
+| summarize calls = count(), avg_ms = round(avg(duration), 1) by name
+
+
+// 3. Errors and blocked requests
+exceptions
+| where timestamp > ago(24h)
+| project timestamp, cloud_RoleName, type, outerMessage
+| order by timestamp desc

@@ -1,0 +1,11 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Secrets - never commit
+local.settings.json
+.env
+
+# OS
+.DS_Store

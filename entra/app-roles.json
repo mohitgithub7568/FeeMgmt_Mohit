@@ -1,0 +1,24 @@
+[
+  {
+    "value": "Fee.Admin",
+    "displayName": "Fee Admin",
+    "description": "Can search and update student fee records",
+    "allowedMemberTypes": [
+      "Application",
+      "User"
+    ],
+    "isEnabled": true,
+    "id": "fe572bdc-e784-4307-a087-c444dd543239"
+  },
+  {
+    "value": "Fee.Reader",
+    "displayName": "Fee Reader",
+    "description": "Can search student fee records (read only)",
+    "allowedMemberTypes": [
+      "Application",
+      "User"
+    ],
+    "isEnabled": true,
+    "id": "d96b997f-530f-4262-968d-ac172966f55b"
+  }
+]

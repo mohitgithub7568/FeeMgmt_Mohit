@@ -1,0 +1,24 @@
+<!--
+  Policy for "Student Fee API" (applied at API scope).
+  - Callers must send a valid subscription key (set on the API: subscription required).
+  - Rate limit: max 20 calls per 60 seconds per subscription key; extra calls get 429.
+  - Attaches the Function's secret key (named value "func-key") so only APIM can call the Function.
+-->
+<policies>
+    <inbound>
+        <base />
+        <rate-limit calls="20" renewal-period="60" />
+        <set-header name="x-functions-key" exists-action="override">
+            <value>{{func-key}}</value>
+        </set-header>
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

@@ -1,0 +1,30 @@
+<!--
+  Operation policy for "Admin Fee API" -> "Update fee" (PATCH /students/{studentId}/fee).
+  <base /> runs the API-level policy first (rate limit, token check, caller id, function key).
+  Then: only tokens with the Fee.Admin role may update. Fee.Reader gets 403 Forbidden.
+-->
+<policies>
+    <inbound>
+        <base />
+        <choose>
+            <when condition="@(!((Jwt)context.Variables["jwt"]).Claims.GetValueOrDefault("roles", "").Split(',').Contains("Fee.Admin"))">
+                <return-response>
+                    <set-status code="403" reason="Forbidden" />
+                    <set-header name="Content-Type" exists-action="override">
+                        <value>application/json</value>
+                    </set-header>
+                    <set-body>{"error": "Forbidden: the Fee.Admin role is required to update fee records"}</set-body>
+                </return-response>
+            </when>
+        </choose>
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

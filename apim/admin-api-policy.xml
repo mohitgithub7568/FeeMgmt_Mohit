@@ -1,0 +1,56 @@
+<!--
+  Policy for "Admin Fee API" (applied at API scope).
+  - Callers must send a valid "Admin Access" subscription key (set on the API: subscription required).
+  - Rate limit: max 60 calls per 60 seconds per subscription key; extra calls get 429.
+  - Entra ID (Azure AD) token required: signature, audience, issuer, expiry and a Fee.Admin or Fee.Reader role.
+    Named values {{tenant-id}} and {{api-app-id}} hold the directory and API IDs.
+  - X-Caller-Id: who is calling (from the token), used by the Function for the audit log.
+  - Attaches the Function's secret key (named value "func-key") so only APIM can call the Function.
+  The "Update fee" operation adds its own policy: Fee.Admin only (admin-update-fee-policy.xml).
+-->
+<policies>
+    <inbound>
+        <base />
+        <rate-limit calls="60" renewal-period="60" />
+        <validate-jwt header-name="Authorization"
+                      failed-validation-httpcode="401"
+                      failed-validation-error-message="Unauthorized: a valid Entra ID token with a Fee role is required"
+                      require-scheme="Bearer"
+                      output-token-variable-name="jwt">
+            <openid-config url="https://login.microsoftonline.com/{{tenant-id}}/v2.0/.well-known/openid-configuration" />
+            <audiences>
+                <audience>api://{{api-app-id}}</audience>
+                <audience>{{api-app-id}}</audience>
+            </audiences>
+            <issuers>
+                <issuer>https://sts.windows.net/{{tenant-id}}/</issuer>
+                <issuer>https://login.microsoftonline.com/{{tenant-id}}/v2.0</issuer>
+            </issuers>
+            <required-claims>
+                <claim name="roles" match="any">
+                    <value>Fee.Admin</value>
+                    <value>Fee.Reader</value>
+                </claim>
+            </required-claims>
+        </validate-jwt>
+        <set-header name="X-Caller-Id" exists-action="override">
+            <value>@{
+                var jwt = (Jwt)context.Variables["jwt"];
+                var who = jwt.Claims.GetValueOrDefault("upn", jwt.Claims.GetValueOrDefault("appid", "unknown"));
+                return who + " | " + jwt.Claims.GetValueOrDefault("roles", "");
+            }</value>
+        </set-header>
+        <set-header name="x-functions-key" exists-action="override">
+            <value>{{func-key}}</value>
+        </set-header>
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

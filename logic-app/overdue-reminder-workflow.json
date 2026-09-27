@@ -1,0 +1,115 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "$connections": {
+      "defaultValue": {},
+      "type": "Object"
+    }
+  },
+  "triggers": {
+    "Every_day_at_9AM_IST": {
+      "type": "Recurrence",
+      "recurrence": {
+        "frequency": "Day",
+        "interval": 1,
+        "timeZone": "India Standard Time",
+        "schedule": {
+          "hours": ["9"],
+          "minutes": [0]
+        }
+      }
+    }
+  },
+  "actions": {
+    "Get_overdue_students": {
+      "type": "ApiConnection",
+      "runAfter": {},
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('$connections')['sql']['connectionId']"
+          }
+        },
+        "method": "post",
+        "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('default'))},@{encodeURIComponent(encodeURIComponent('default'))}/query/sql",
+        "body": {
+          "query": "SELECT StudentID, Name, Email, Course, TotalFee, PaidAmount, TotalFee - PaidAmount AS Balance, CONVERT(varchar(10), DueDate, 23) AS DueDate, DATEDIFF(DAY, DueDate, CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'India Standard Time' AS date)) AS DaysOverdue FROM dbo.Students WHERE PaidAmount < TotalFee AND DueDate < CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'India Standard Time' AS date) AND IsTestData = 0 AND (LastReminderSentAt IS NULL OR LastReminderSentAt < DATEADD(DAY, -3, SYSUTCDATETIME())) ORDER BY DueDate"
+        },
+        "retryPolicy": {
+          "type": "exponential",
+          "count": 4,
+          "interval": "PT10S",
+          "minimumInterval": "PT5S",
+          "maximumInterval": "PT1H"
+        }
+      }
+    },
+    "For_each_overdue_student": {
+      "type": "Foreach",
+      "foreach": "@coalesce(body('Get_overdue_students')?['resultsets']?['Table1'], json('[]'))",
+      "runAfter": {
+        "Get_overdue_students": ["Succeeded"]
+      },
+      "runtimeConfiguration": {
+        "concurrency": {
+          "repetitions": 5
+        }
+      },
+      "actions": {
+        "Send_reminder_email": {
+          "type": "ApiConnection",
+          "runAfter": {},
+          "inputs": {
+            "host": {
+              "connection": {
+                "name": "@parameters('$connections')['outlook']['connectionId']"
+              }
+            },
+            "method": "post",
+            "path": "/v2/Mail",
+            "body": {
+              "To": "@items('For_each_overdue_student')?['Email']",
+              "Subject": "Fee reminder: Rs. @{formatNumber(items('For_each_overdue_student')?['Balance'], 'N2', 'en-IN')} overdue",
+              "Body": "<p>Dear @{items('For_each_overdue_student')?['Name']},</p><p>This is a reminder that your fee for <b>@{items('For_each_overdue_student')?['Course']}</b> is overdue.</p><ul><li>Total fee: Rs. @{formatNumber(items('For_each_overdue_student')?['TotalFee'], 'N2', 'en-IN')}</li><li>Paid so far: Rs. @{formatNumber(items('For_each_overdue_student')?['PaidAmount'], 'N2', 'en-IN')}</li><li><b>Balance due: Rs. @{formatNumber(items('For_each_overdue_student')?['Balance'], 'N2', 'en-IN')}</b></li><li>Due date: @{items('For_each_overdue_student')?['DueDate']} (@{items('For_each_overdue_student')?['DaysOverdue']} days overdue)</li></ul><p>Please clear your dues at the earliest. If you have already paid, please ignore this email.</p><p>Regards,<br/>Accounts Office</p>",
+              "Importance": "High"
+            },
+            "retryPolicy": {
+              "type": "exponential",
+              "count": 4,
+              "interval": "PT10S",
+              "minimumInterval": "PT5S",
+              "maximumInterval": "PT1H"
+            }
+          }
+        },
+        "Mark_as_reminded": {
+          "type": "ApiConnection",
+          "runAfter": {
+            "Send_reminder_email": ["Succeeded"]
+          },
+          "inputs": {
+            "host": {
+              "connection": {
+                "name": "@parameters('$connections')['sql']['connectionId']"
+              }
+            },
+            "method": "post",
+            "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('default'))},@{encodeURIComponent(encodeURIComponent('default'))}/query/sql",
+            "body": {
+              "query": "UPDATE dbo.Students SET LastReminderSentAt = SYSUTCDATETIME() WHERE StudentID = @{int(items('For_each_overdue_student')?['StudentID'])}"
+            },
+            "retryPolicy": {
+              "type": "exponential",
+              "count": 4,
+              "interval": "PT10S",
+              "minimumInterval": "PT5S",
+              "maximumInterval": "PT1H"
+            }
+          }
+        }
+      }
+    }
+  },
+  "outputs": {}
+}
