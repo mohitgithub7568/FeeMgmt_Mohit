@@ -7,6 +7,8 @@ A serverless backend for managing student fees.
 
 **Built with:** Azure SQL Database, Azure Functions (Python), API Management, Entra ID, Logic Apps (Outlook), Application Insights.
 
+**Demo video:** [Watch on Google Drive](https://drive.google.com/file/d/1UcND4ZFnWf48APsr05f2_Pcu3le73mbt/view?usp=sharing): API calls, reminder emails, and admin security (allowed and denied).
+
 ## Architecture
 
 ```mermaid
