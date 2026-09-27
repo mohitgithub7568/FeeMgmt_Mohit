@@ -29,6 +29,43 @@ flowchart LR
 - **Azure SQL** stores the `Students`, `Administrators` and `FeeAuditLog` tables.
 - **Logic App** runs every day at 9 AM (IST), finds overdue students and emails them.
 
+### Admin fee update
+
+```mermaid
+sequenceDiagram
+    participant A as Admin app
+    participant E as Entra ID
+    participant G as API Management
+    participant F as Azure Function
+    participant D as Azure SQL
+    A->>E: client ID + secret
+    E-->>A: token with role (Fee.Admin or Fee.Reader)
+    A->>G: PATCH /admin-fees/students/{id}/fee<br/>API key + Bearer token
+    Note over G: API key valid? else 401<br/>Under 60 calls/min? else 429<br/>Token valid? else 401<br/>Role is Fee.Admin? else 403
+    G->>F: request + function key + caller id
+    F->>D: lock row, update fee, add FeeAuditLog row (one transaction)
+    D-->>F: saved
+    F-->>G: 200 + new fee status
+    G-->>A: 200
+```
+
+### Daily reminders
+
+```mermaid
+sequenceDiagram
+    participant L as Logic App
+    participant D as Azure SQL
+    participant O as Outlook
+    Note over L: Recurrence trigger, every day at 9 AM IST
+    L->>D: get overdue students<br/>(not test data, not reminded in the last 3 days)
+    D-->>L: list of students
+    loop each student, 5 at a time
+        L->>O: send reminder email
+        L->>D: set LastReminderSentAt = now
+    end
+    Note over L,D: every step retries up to 4 times (exponential backoff)
+```
+
 ## Requirements
 
 | Requirement | Where |
