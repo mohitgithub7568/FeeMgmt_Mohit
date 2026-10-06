@@ -9,6 +9,16 @@ A serverless backend for managing student fees.
 
 **Demo video:** [Watch on Google Drive](https://drive.google.com/file/d/1UcND4ZFnWf48APsr05f2_Pcu3le73mbt/view?usp=sharing): API calls, reminder emails, and admin security (allowed and denied).
 
+> **Status:** the Azure resources were deprovisioned after the demo to avoid running costs. The demo video shows the working system, and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) explains how to redeploy it (about 1 hour).
+
+## Highlights
+
+- **One secure entry point:** API Management with separate student/admin keys, rate limiting (20 and 60 calls/min) and Entra ID token validation.
+- **Role-based access:** `Fee.Admin` can update fees, `Fee.Reader` can only search (403 on update). Tested for 401, 403, 429 and 200.
+- **Safe updates:** each fee change locks the row and writes an audit record in the same transaction.
+- **Automation:** a Logic App emails overdue students every morning, with retries and at most one reminder every 3 days.
+- **Scale and monitoring:** tested with 5,000+ records (indexed, paginated). Application Insights + KQL (about 150 ms average response).
+
 ## Architecture
 
 ```mermaid
@@ -118,6 +128,14 @@ Every update is saved in `FeeAuditLog` with who changed it, the old and new valu
 - Security: no key → 401, reader update → 403, admin update → 200 with an audit row, direct Function call → 401.
 - Reminders: the Logic App sent 7 emails to overdue students. Running it again the same day sent none (a student is reminded at most once every 3 days).
 - The status API responds in about 150 ms when the database is awake.
+
+## Challenges solved
+
+- **Paused database:** the free serverless database pauses when idle, so the first call failed. Fixed with a connection retry (4 attempts: 5, 10, 15 s).
+- **Reserved route:** Azure Functions reserves routes starting with `admin`. The backend uses `manage/…`, and APIM exposes it as `/admin-fees/…`.
+- **Empty reminder runs:** when nobody was overdue, the SQL step returned no table and the Logic App failed. Fixed with `coalesce(…, json('[]'))`.
+- **Locking the backend:** the Function requires a key that only APIM holds, so it can't be called directly (direct call → 401).
+- **Token formats:** Entra ID issued v1 tokens, so the JWT policy accepts both v1 and v2 issuers and audiences.
 
 ## Notes and assumptions
 
